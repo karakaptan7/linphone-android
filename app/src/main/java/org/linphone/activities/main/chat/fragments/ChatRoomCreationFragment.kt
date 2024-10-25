@@ -63,12 +63,8 @@ class ChatRoomCreationFragment : SecureFragment<ChatRoomCreationFragmentBinding>
         binding.viewModel = viewModel
 
         adapter = ContactsSelectionAdapter(viewLifecycleOwner)
-        adapter.setGroupChatCapabilityRequired(
-            viewModel.createGroupChat.value == true && !corePreferences.allowGroupChatWithoutPresence
-        )
-        adapter.setLimeCapabilityRequired(
-            viewModel.isEncrypted.value == true && !corePreferences.allowEndToEndEncryptedChatWithoutPresence
-        )
+        adapter.setGroupChatCapabilityRequired(viewModel.createGroupChat.value == true)
+        adapter.setLimeCapabilityRequired(viewModel.isEncrypted.value == true)
         binding.contactsList.adapter = adapter
 
         val layoutManager = LinearLayoutManager(requireContext())
@@ -98,9 +94,7 @@ class ChatRoomCreationFragment : SecureFragment<ChatRoomCreationFragmentBinding>
         viewModel.isEncrypted.observe(
             viewLifecycleOwner
         ) {
-            adapter.setLimeCapabilityRequired(
-                it && !corePreferences.allowEndToEndEncryptedChatWithoutPresence
-            )
+            adapter.setLimeCapabilityRequired(it)
         }
 
         viewModel.sipContactsSelected.observe(
