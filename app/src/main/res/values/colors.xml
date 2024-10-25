@@ -2,12 +2,12 @@
 <resources>
     <color name="transparent_color">#00000000</color>
 
-    <color name="primary_color">#ff5e00</color> <!-- Try to have a color that renders well on both light & dark theme -->
+    <color name="primary_color">#003765</color> <!-- Try to have a color that renders well on both light & dark theme -->
     <!-- You can use https://material.io/design/color/#tools-for-picking-colors to get dark color value from primary -->
-    <color name="primary_dark_color">#e65000</color>
-    <color name="primary_light_color">#ffab4d</color>
-    <color name="primary_color_disabled">#4DFE5E00</color> <!-- Try to have a color that renders well on both light & dark theme -->
-    <color name="notification_led_color">#ff8000</color>
+    <color name="primary_dark_color">#003765</color>
+    <color name="primary_light_color">#003765</color>
+    <color name="primary_color_disabled">#009dde</color> <!-- Try to have a color that renders well on both light & dark theme -->
+    <color name="notification_led_color">#d7df3c</color>
 
     <color name="black_color">#000000</color>
     <color name="dark_grey_color">#444444</color>
@@ -37,7 +37,7 @@
     <color name="voip_dark_color5">#353B3F</color> <!-- Scheduled conference background dark mode -->
     <color name="voip_text_dark_color">#6E8596</color> <!-- Text color above voip_dark_color5 -->
     <color name="voip_conf_address_text_color">#A2A2A2</color>
-    <color name="voip_conference_updated_color">#EFAE00</color>
+    <color name="voip_conference_updated_color">#49b7e8</color>
     <color name="voip_conference_cancelled_title_color">#FF0000</color>
     <color name="voip_conference_cancelled_bg_color_light">#FFE6E6</color>
     <color name="voip_conference_cancelled_bg_color_dark">#3D3434</color>

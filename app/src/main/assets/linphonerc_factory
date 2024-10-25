@@ -44,9 +44,8 @@ record_aware=1
 
 [account_creator]
 backend=1
-# 1 means FlexiAPI, 0 is XMLRPC
-url=https://subscribe.linphone.org/api/
-# replace above URL by https://staging-subscribe.linphone.org/api/ for testing
+
+url=https://labeco.ttsanalsantral.com.tr/api_v1
 
 [lime]
 lime_update_threshold=86400
