@@ -19,19 +19,29 @@
  */
 package org.linphone.activities.main
 
+import ApiResponse
+import Contact
 import android.app.Dialog
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
+import android.provider.Settings
+import android.telephony.TelephonyManager
+import android.telephony.cdma.CdmaCellLocation
+import android.telephony.gsm.GsmCellLocation
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import androidx.annotation.StringRes
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.doOnAttach
 import androidx.databinding.DataBindingUtil
@@ -45,10 +55,21 @@ import androidx.navigation.findNavController
 import androidx.window.layout.FoldingFeature
 import coil.imageLoader
 import com.google.android.material.snackbar.Snackbar
+import com.google.gson.Gson
+import java.io.IOException
 import java.io.UnsupportedEncodingException
 import java.net.URLDecoder
+import java.util.jar.Manifest
 import kotlin.math.abs
 import kotlinx.coroutines.*
+import okhttp3.*
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Response
 import org.linphone.LinphoneApplication.Companion.coreContext
 import org.linphone.LinphoneApplication.Companion.corePreferences
 import org.linphone.R
@@ -69,7 +90,10 @@ import org.linphone.core.tools.Log
 import org.linphone.databinding.MainActivityBinding
 import org.linphone.utils.*
 
-class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestinationChangedListener {
+class MainActivity :
+    GenericActivity(),
+    SnackBarActivity,
+    NavController.OnDestinationChangedListener {
     private lateinit var binding: MainActivityBinding
     private lateinit var sharedViewModel: SharedMainViewModel
     private lateinit var callOverlayViewModel: CallOverlayViewModel
@@ -94,8 +118,95 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
     private var initPosY = 0f
     private var overlay: View? = null
 
+    private val LOCATION_PERMISSION_REQUEST_CODE = 1
+
+    private fun checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                    this,
+                    android.Manifest.permission.READ_PHONE_STATE
+                ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.READ_PHONE_STATE
+                ),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
+        } else {
+            getCellLocation()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                getCellLocation()
+            } else {
+                // Permission denied
+            }
+        }
+    }
+
+    private fun getCellLocation() {
+        val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+
+        val cellLocation = if (ActivityCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        } else {
+            telephonyManager.cellLocation
+        }
+
+        if (cellLocation != null) {
+            when (cellLocation) {
+                is GsmCellLocation -> {
+                    val lac = cellLocation.lac
+                    val cid = cellLocation.cid
+                    Log.d("CellLocation", "GSM Cell Location - LAC: $lac, CID: $cid")
+                }
+
+                is CdmaCellLocation -> {
+                    val baseStationId = cellLocation.baseStationId
+                    val latitude = cellLocation.baseStationLatitude
+                    val longitude = cellLocation.baseStationLongitude
+                    Log.d(
+                        "CellLocation",
+                        "CDMA Cell Location - Base Station ID: $baseStationId, Latitude: $latitude, Longitude: $longitude"
+                    )
+                }
+
+                else -> {
+                    Log.d("CellLocation", "Unknown Cell Location")
+                }
+            }
+        } else {
+            Log.d("CellLocation", "Cell Location is null")
+        }
+    }
+
     private val componentCallbacks = object : ComponentCallbacks2 {
-        override fun onConfigurationChanged(newConfig: Configuration) { }
+        override fun onConfigurationChanged(newConfig: Configuration) {}
 
         override fun onLowMemory() {
             Log.w("[Main Activity] onLowMemory !")
@@ -209,8 +320,30 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
         super.onResume()
         coreContext.contactsManager.addListener(listener)
         coreContext.core.addListener(coreListener)
+        if (!isLocationEnabled()) {
+            showLocationServicesDisabledWarning()
+        }
     }
-
+    private fun isLocationEnabled(): Boolean {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
+    private fun showLocationServicesDisabledWarning() {
+        Snackbar.make(
+            findViewById(R.id.coordinator),
+            R.string.permission_denied_warning,
+            Snackbar.LENGTH_LONG
+        )
+            .setAction(R.string.enable_location) {
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }.addCallback(object : Snackbar.Callback() {
+                override fun onDismissed(transientBottomBar: Snackbar?, event: Int) {
+                    super.onDismissed(transientBottomBar, event)
+                    finish()
+                }
+            }).show()
+    }
     override fun onPause() {
         coreContext.core.removeListener(coreListener)
         coreContext.contactsManager.removeListener(listener)
@@ -242,11 +375,13 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
         findNavController(R.id.nav_host_fragment).addOnDestinationChangedListener(this)
 
         binding.rootCoordinatorLayout.setKeyboardInsetListener { keyboardVisible ->
-            val portraitOrientation = resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
+            val portraitOrientation =
+                resources.configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
             Log.i(
                 "[Main Activity] Keyboard is ${if (keyboardVisible) "visible" else "invisible"}, orientation is ${if (portraitOrientation) "portrait" else "landscape"}"
             )
-            shouldTabsBeVisibleDueToOrientationAndKeyboard = !portraitOrientation || !keyboardVisible
+            shouldTabsBeVisibleDueToOrientationAndKeyboard =
+                !portraitOrientation || !keyboardVisible
             updateTabsFragmentVisibility()
 
             for (listener in keyboardVisibilityListeners) {
@@ -281,6 +416,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
         shouldTabsBeVisibleDependingOnDestination = when (destination.id) {
             R.id.masterCallLogsFragment, R.id.masterContactsFragment, R.id.dialerFragment, R.id.masterChatRoomsFragment ->
                 true
+
             else -> false
         }
         updateTabsFragmentVisibility()
@@ -313,7 +449,8 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
     }
 
     private fun updateTabsFragmentVisibility() {
-        tabsFragment.visibility = if (shouldTabsBeVisibleDependingOnDestination && shouldTabsBeVisibleDueToOrientationAndKeyboard) View.VISIBLE else View.GONE
+        tabsFragment.visibility =
+            if (shouldTabsBeVisibleDependingOnDestination && shouldTabsBeVisibleDueToOrientationAndKeyboard) View.VISIBLE else View.GONE
     }
 
     private fun handleIntentParams(intent: Intent) {
@@ -332,11 +469,13 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                     }
                 }
             }
+
             Intent.ACTION_SEND_MULTIPLE -> {
                 lifecycleScope.launch {
                     handleSendMultipleFiles(intent)
                 }
             }
+
             Intent.ACTION_VIEW -> {
                 val uri = intent.data
                 if (uri != null) {
@@ -371,12 +510,14 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                     }
                 }
             }
+
             Intent.ACTION_DIAL, Intent.ACTION_CALL -> {
                 val uri = intent.data
                 if (uri != null) {
                     handleTelOrSipUri(uri)
                 }
             }
+
             Intent.ACTION_VIEW_LOCUS -> {
                 if (corePreferences.disableChat) return
                 val locus = Compatibility.extractLocusIdFromIntent(intent)
@@ -385,6 +526,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                     handleLocusOrShortcut(locus)
                 }
             }
+
             else -> handleMainIntent(intent)
         }
 
@@ -406,6 +548,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                 Log.i("[Main Activity] Found contact ID in extras: $id")
                 navigateToContact(id)
             }
+
             intent.hasExtra("Chat") -> {
                 if (corePreferences.disableChat) return
 
@@ -421,18 +564,21 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                     navigateToChatRooms()
                 }
             }
+
             intent.hasExtra("Dialer") -> {
                 Log.i("[Main Activity] Found dialer intent extra, go to dialer")
                 val isTransfer = intent.getBooleanExtra("Transfer", false)
                 sharedViewModel.pendingCallTransfer = isTransfer
                 navigateToDialer()
             }
+
             intent.hasExtra("Contacts") -> {
                 Log.i("[Main Activity] Found contacts intent extra, go to contacts list")
                 val isTransfer = intent.getBooleanExtra("Transfer", false)
                 sharedViewModel.pendingCallTransfer = isTransfer
                 navigateToContacts()
             }
+
             else -> {
                 val core = coreContext.core
                 val call = core.currentCall ?: core.calls.firstOrNull()
@@ -463,10 +609,12 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                 Log.i("[Main Activity] Removing tel: prefix")
                 addressToCall = addressToCall.substring("tel:".length)
             }
+
             addressToCall.startsWith("linphone:") -> {
                 Log.i("[Main Activity] Removing linphone: prefix")
                 addressToCall = addressToCall.substring("linphone:".length)
             }
+
             addressToCall.startsWith("sip-linphone:") -> {
                 Log.i("[Main Activity] Removing linphone: sip-linphone")
                 addressToCall = addressToCall.substring("sip-linphone:".length)
@@ -567,10 +715,13 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
             when {
                 addressToIM.startsWith("sms:") ->
                     addressToIM = addressToIM.substring("sms:".length)
+
                 addressToIM.startsWith("smsto:") ->
                     addressToIM = addressToIM.substring("smsto:".length)
+
                 addressToIM.startsWith("mms:") ->
                     addressToIM = addressToIM.substring("mms:".length)
+
                 addressToIM.startsWith("mmsto:") ->
                     addressToIM = addressToIM.substring("mmsto:".length)
             }
@@ -586,7 +737,8 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
             )
             navigateToChatRoom(localAddress, peerAddress)
         } else {
-            val shortcutId = intent.getStringExtra("android.intent.extra.shortcut.ID") // Intent.EXTRA_SHORTCUT_ID
+            val shortcutId =
+                intent.getStringExtra("android.intent.extra.shortcut.ID") // Intent.EXTRA_SHORTCUT_ID
             if (shortcutId != null) {
                 Log.i("[Main Activity] Found shortcut ID: $shortcutId")
                 handleLocusOrShortcut(shortcutId)
@@ -627,6 +779,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                     initPosX = view.x
                     initPosY = view.y
                 }
+
                 MotionEvent.ACTION_MOVE -> {
                     view.animate()
                         .x(event.rawX + overlayX)
@@ -634,6 +787,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                         .setDuration(0)
                         .start()
                 }
+
                 MotionEvent.ACTION_UP -> {
                     if (abs(initPosX - view.x) < CorePreferences.OVERLAY_CLICK_SENSITIVITY &&
                         abs(initPosY - view.y) < CorePreferences.OVERLAY_CLICK_SENSITIVITY
@@ -641,6 +795,7 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
                         view.performClick()
                     }
                 }
+
                 else -> return@setOnTouchListener false
             }
             true
@@ -736,5 +891,53 @@ class MainActivity : GenericActivity(), SnackBarActivity, NavController.OnDestin
 
         dialog.show()
         authenticationRequiredDialog = dialog
+    }
+
+    val contactList = mutableListOf<Contact>()
+
+    fun fetchContacts() {
+        val client = OkHttpClient()
+        val url = "https://panel.intouchtech.com.tr/api.php"
+        val json = """
+        {
+            "action": "dahili_liste",
+            "email": "c@d.com",
+            "sifre": "123123*"
+        }
+        """.trimIndent()
+
+        val body = RequestBody.create("application/json; charset=utf-8".toMediaType(), json)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                e.printStackTrace()
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.body?.string()?.let { responseBody ->
+                    val apiResponse = Gson().fromJson(responseBody, ApiResponse::class.java)
+                    if (apiResponse.type == "success") {
+                        addContacts(apiResponse.values)
+                        println(responseBody)
+                    } else {
+                        println("Failed to fetch contacts: ${apiResponse.desc}")
+                    }
+                }
+            }
+        })
+    }
+
+    fun addContacts(contacts: List<Contact>) {
+        // Add contacts to your contacts list
+        contacts.forEach { contact ->
+            println("Adding contact: ${contact.user_adi}")
+            contactList.add(contact)
+
+            // Add logic to save contact to your contacts list
+        }
     }
 }

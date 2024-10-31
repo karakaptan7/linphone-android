@@ -18,6 +18,9 @@
         <string name="service_description">Arka planda çağrıları almak için gereklidir</string>
         <string name="sync_account_name">&appName; kişiler</string>
 
+        <string name="permission_denied_warning">&appName; %s sadece Türkiye\'de kullanılabilir. Bağlantı sonlandırılıyor.</string>
+    <string name="enable_location">Konum Servislerini Etkinleştir</string>
+
         <!-- Hakkında ekranı -->
         <string name="about_link" translatable="false">https://ttsanalsantral.com.tr</string>
         <string name="about_privacy_policy_link" translatable="false">https://www.ttsanalsantral.com.tr/privacy-policy</string>

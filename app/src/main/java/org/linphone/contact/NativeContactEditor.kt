@@ -184,13 +184,23 @@ class NativeContactEditor(val friend: Friend) {
         return this
     }
 
-    fun setPhoneNumbers(value: List<NumberOrAddressEditorData>): NativeContactEditor {
+    fun setPhoneNumbers(value: List<NumberOrAddressEditorData>, code: Int): NativeContactEditor {
+        var code = code
         var addCount = 0
         var removeCount = 0
         var editCount = 0
 
         for (phoneNumber in value) {
             when {
+                code == 90 -> {
+                    // New phone number to add
+                    val number = phoneNumber.newValue.value.orEmpty()
+                    if (number.isNotEmpty()) {
+                        addCount++
+                        addPhoneNumber(number)
+                    }
+                }
+
                 phoneNumber.currentValue.isEmpty() -> {
                     // New phone number to add
                     val number = phoneNumber.newValue.value.orEmpty()
@@ -221,13 +231,23 @@ class NativeContactEditor(val friend: Friend) {
         return this
     }
 
-    fun setSipAddresses(value: List<NumberOrAddressEditorData>): NativeContactEditor {
+    fun setSipAddresses(value: List<NumberOrAddressEditorData>, code: Int): NativeContactEditor {
+        var code = code
+
         var addCount = 0
         var removeCount = 0
         var editCount = 0
 
         for (sipAddress in value) {
             when {
+                code == 90 -> {
+                    // New phone number to add
+                    val address = sipAddress.newValue.value.orEmpty()
+                    if (address.isNotEmpty()) {
+                        addCount++
+                        addSipAddress(address)
+                    }
+                }
                 sipAddress.currentValue.isEmpty() -> {
                     // New address to add
                     val address = sipAddress.newValue.value.orEmpty()

@@ -126,8 +126,8 @@ class ContactEditorData(val friend: Friend?) : ContactDataInterface {
             NativeContactEditor(contact)
                 .setFirstAndLastNames(firstName.value.orEmpty(), lastName.value.orEmpty())
                 .setOrganization(organization.value.orEmpty())
-                .setPhoneNumbers(numbers.value.orEmpty())
-                .setSipAddresses(addresses.value.orEmpty())
+                .setPhoneNumbers(numbers.value.orEmpty(), 91)
+                .setSipAddresses(addresses.value.orEmpty(), 91)
                 .setPicture(picture)
                 .commit()
         }

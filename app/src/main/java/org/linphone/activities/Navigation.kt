@@ -29,6 +29,7 @@ import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.fragment.findNavController
 import androidx.slidingpanelayout.widget.SlidingPaneLayout
+import fetchContacts
 import org.linphone.R
 import org.linphone.activities.assistant.fragments.*
 import org.linphone.activities.main.MainActivity
@@ -123,6 +124,7 @@ internal fun TabsFragment.navigateToCallHistory() {
 }
 
 internal fun TabsFragment.navigateToContacts() {
+    fetchContacts()
     val action = when (findNavController().currentDestination?.id) {
         R.id.masterCallLogsFragment -> R.id.action_masterCallLogsFragment_to_masterContactsFragment
         R.id.dialerFragment -> R.id.action_dialerFragment_to_masterContactsFragment
